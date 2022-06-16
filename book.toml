@@ -1,0 +1,6 @@
+[book]
+authors = ["Jenny Ryan"]
+language = "en"
+multilingual = false
+src = "src"
+title = "Ouinet Documentation"

@@ -1,0 +1,61 @@
+# Injector Servers
+
+The Ouinet network contains a collection of *injector servers*, which are modified HTTP proxy servers that can perform HTTP requests on behalf of Ouinet clients that cannot reach the required HTTP origin servers directly. Injector servers have the authority to create cache entries for the Ouinet distributed cache based on the HTTP requests they perform on behalf of Ouinet clients. Their responsibility is not limited to the distributed cache, however; Ouinet clients can use the injector servers to fetch resources to be stored in the distributed cache, as well as to perform HTTP requests on their behalf that are not eligible for caching, serving in that facility like a standard HTTP proxy.
+
+Where standard HTTP proxies usually can be connected to in the form of a TCP connection, the Ouinet injector servers can be reached through a variety of methods that encode a network connection in different ways. The primary reason for this variation is to make it difficult for a network operator to block or restrict access by users to the Ouinet injector servers; instead of blocking one particular protocol with an easily recognizable signature, a network operator would have to block a larger collection of individual techniques, each with different strengths and weaknesses. For the same reason, the collection of connection techniques used by the injector servers can vary over time. Some of the mechanisms by which injector servers might be reached are applications of existing network obfuscation projects, such as the [Pluggable Transports](https://www.pluggabletransports.info/) project; others are innovations of the Ouinet project.
+
+Injector servers form a trusted part of the Ouinet network. With the authority to create cache entries for the distributed cache, as well as the position as an intermediary for many Ouinet client HTTP requests, a compromised injector server could do signicant harm to users of the Ouinet system. The Ouinet project operates a collection of injector servers; however, to reduce the reliance on the trustworthiness of these servers, the Ouinet network is set up in such a way that any organization can run its own collection of injector servers, independent from the Ouinet project. Users or applications wishing to make use of such third-party injector servers can configure their injector servers of choice in the Ouinet client. This chapter specifies the ways by which injector servers operated by the Ouinet project can be reached; different configurations will likely apply to third-party injector servers.
+
+
+## Injector server connections
+
+The Ouinet project implements several different mechanisms by which a Ouinet client can establish a connection to an injector server. The Ouinet client and injector servers both can be configured to use selected subsets of these mechanisms, adapting their strategies to the conditions of the networks on which they operate. Besides making it difficult for a network operator to block connections to the injector servers, this configurable varied approach makes it possible to respond to developments in network blocking technology.
+
+When an injector server is configured to use multiple connection mechanisms, it will listen for connections through any of these mechanisms. A Ouinet client configured with multiple connection mechanisms will try to reach an injector server through any of these mechanisms, trying different options until a connection is established successfully. A Ouinet client may keep track of which mechanisms tend to work well and which ones work poorly, and try to use the most effective option in the future.
+
+Once a Ouinet client establishes a connection to an injector server, a TLS session is established over the connection. The configuration of the Ouinet client includes a specification of the TLS certificate used by the injector server, which is used by the client to verify that it is connected to an authentic injector server. Once it has confirmed this authenticity, the Ouinet client can then start sending HTTP proxy requests to the injector server.
+
+### Injector uTP sockets
+
+As one of the mechanisms by which a connection to an injector server can be established, injector servers accept connections using the [uTP protocol](http://bittorrent.org/beps/bep_0029.html). As mentioned in the [Peer-to-peer cache entry exchange](#peer-to-peer-cache-entry-exchange) section, connections using the uTP protocol are rarely blocked by network operators, making this a good first choice option for connecting to an injector server.
+
+The IP addresses on which the injector servers can be reached through the uTP protocol are not published using the DNS system, because DNS communications are very frequently blocked by network operators. Instead, the Ouinet network stores the IP addresses and uTP port numbers of the injector servers in the BitTorrent distributed hash table. Active injector servers announce their IP address and port number to the BitTorrent distributed hash table addressed to a configured distributed hash table location, and Ouinet clients request a list of such injector servers from the distributed hash table in the same way.
+
+The location in the distributed hash table used to store the list of active injector servers is configured differently for each organization operating a collection of injector servers, and needs to be configured the same way in Ouinet clients wishing to use these injector servers. This location is derived from the public key of the configured injector servers, and computed as the SHA1 hash of the string `ed25519:<public-key>/v<protocol-version>/injectors`, where `<public-key>` is the public key of the injector server used to sign cache entries for the distributed cache, encoded using lower-case unpadded base32; and `<protocol-version>` is the version of the Ouinet protocol.
+
+### Peer-to-peer tunnels
+
+When a client establishes a connection to an injector server and verifies that the injector server it is connected to is genuine, it may then choose to function as an intermediary, allowing less fortunate clients to reach the injector server through them. A client functioning as an intermediary in this way is referred to as a *bridge node*.
+
+If a client chooses to function as a bridge node, it will accept connections using the uTP protocol, and announce its address details to the BitTorrent distributed hash table. Whenever the client accepts a connection in this way, it will create a connection to an injector server through one of the methods described in this chapter, and forward all traffic received over the incoming connection to the connection with the injector server, and vice versa. This lets the client function as an intermediary between an injector server, and a different client that is unable to connect to the injector servers directly.
+
+A client wishing to function as a bridge node should start announcing its participation as soon as it has established a verified connection to an authentic injector server, while using a connection that does not itself rely on a bridge node. Likewise, the client should avoid making a connection to an injector server on behalf of another client if that connection itself makes use of a bridge node, for such a connection with multiple intermediaries would be unnecessarily inefficient.
+
+Like the distributed hash table location used to store the list of active injector servers, the location used to store the list of bridge nodes is something that varies based on the configuration of the Ouinet client. This location is computed as the SHA1 hash of the string `ed25519:<public-key>/v<protocol-version>/bridges`, where `<public-key>` is the public key of the injector server used to sign cache entries for the distributed cache, encoded using lower-case unpadded base32; and `<protocol-version>` is the version of the Ouinet protocol.
+
+### Other connection methods
+
+Besides the two connection mechanisms mentioned above, the Ouinet client and injector servers can also be configured to use a variety of connection mechanisms based on network protocols implemented in different projects. Examples include the suite of protocol implementations developed as part of the [Pluggable Transports](https://www.pluggabletransports.info/) project, and connections established using the [I2P protocol](https://geti2p.net/). The exact list of such mechanisms implemented in the Ouinet software varies frequently, and is not described in detail in this document.
+
+
+## Injector server functionality
+
+Once a Ouinet client has established a connection to an injector through any of the mechanisms mentioned in the previous section, the client can request several different operations to be performed by the injector server. These operations are all requests to perform a proxied HTTP request in some form, but with different semantics.
+
+For the injector server to perform any proxy requests at all, the client needs to send a `Proxy-Authenticate` header as part of each request sent to it, authenticating itself to the injector server. For injector servers operated by the Ouinet project, the authentication required to access these servers is published as public knowledge, and this authentication requirement serves no real security purpose, but instead ensures that the injector servers are not used by accident by non-Ouinet applications that did not expect to be connected to a Ouinet injector server. For injector servers operated by third parties, this authentication mechanism may have a legitimate security purpose.
+
+### Cache injection requests
+
+The Ouinet client can request the injector server to fetch a resource and construct a cache entry based on the response, which the client can then share in the distributed cache. The injector server will send a canonical request to the origin server and construct a cache entry after receiving a response, using the procedure described in the [Cache entry construction](#cache-entry-construction) section.
+
+The Ouinet client can request this behavior by sending an HTTP request that includes an `X-Ouinet-Version` header. The injector server will reply with a response described in the [Injector-to-client cache entry exchange](#injector-to-client-cache-entry-exchange) section.
+
+### Cache-ineligible proxy requests
+
+If a Ouinet client wishes to perform a request that is not eligible for caching, such as a POST request or a GET request that contains confidential information, it can request the injector to just forward such a request to the origin server, in the same manner as a standard proxy server. To request this, the client can send any HTTP request that does not include an `X-Ouinet-Version` header. The injector server will respond with a standard HTTP request that does not include any extensions specific to the Ouinet project.
+
+### TLS tunnels
+
+If a Ouinet client sends a request to an injector server using one of the above two mechanisms, the injector server has full access to both the HTTP request and the resulting HTTP response, due to its role as an intermediary. For reasons of confidentiality, this is not always desirable, for the HTTP request or response may contain private information that would ideally be known only to the client and the origin server. When the HTTP request is a request for an HTTPS resource, the origin server may even be implicitly relying on this being the case. While the injector server is a trusted part of the Ouinet network, it would still be ideal if such a request could be processed without depending on the security of the injector server.
+
+To this end, if the Ouinet client wishes to request an HTTPS resource, it may send a CONNECT request to the injector server. When receiving a CONNECT request, the injector server will establish a connection with the origin server, and then proceed to only relay information between the Ouinet client and origin server, without doing any processing on this traffic. The Ouinet client can then establish a TLS session over this tunneled connection, ensuring that the injector server cannot eavesdrop on or interfere with traffic between the Ouinet client and origin server. As a side effect, the injector server will never and cannot create a cache entry based on requests performed in this way.
