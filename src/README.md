@@ -1,6 +1,6 @@
 # Welcome to the Ouinet documentation
 
-Ouinet is a collection of software tools and support infrastructure that provide access to web resources when access to the unrestricted internet is unreliable or unavailable, tailored for scenarios of limited internet connectivity and selective network traffic filtering. It provides the peer-topeer functionality of apps such as [CENO Browser][] and [Paskoocheh][].
+Ouinet is a collection of software tools and support infrastructure that provide access to web resources when access to the unrestricted internet is unreliable or unavailable, tailored for scenarios of limited internet connectivity and selective network traffic filtering. It provides the peer-to-peer functionality of apps such as [CENO Browser][] and [Paskoocheh][].
 
 ## Get started
 
